@@ -1,12 +1,26 @@
-from typing import List
-from fastapi import FastAPI, Depends
-from . import schemas,models
+from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
-from . database import SessionLocal, engine
-app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+from . import crud, models, schemas
+from .database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
 
+app = FastAPI()
+origins = [
+    '*'
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -15,39 +29,50 @@ def get_db():
         db.close()
 
 
-@app.post('/job')
-async def create_job(request: schemas.JobBase, db: Session = Depends(get_db)):
-    new_job = models.Job(**request.model_dump())
-    db.add(new_job)
-    db.commit()
-    db.refresh
-    return new_job
-
-@app.get("/jobs")
-def get_all_jobs(db: Session = Depends(get_db)):
-    jobs = db.query(models.Job).all()
-    return {'jobs': jobs}
+@app.post("/users/", response_model=schemas.User)
+def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    db_user = crud.get_user_by_email(db, email=user.email)
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    return crud.create_user(db=db, user=user)
 
 
-@app.get("/job/{id}")
-def show_job(id, db: Session = Depends(get_db)):
-    job = db.query(models.Job).filter(models.Job.id == id).first()
-    return {'job': job}
+@app.get("/users/", response_model=list[schemas.User])
+def read_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    users = crud.get_users(db, skip=skip, limit=limit)
+    return users
+
+
+@app.get("/users/{user_id}", response_model=schemas.User)
+def read_user(user_id: int, db: Session = Depends(get_db)):
+    db_user = crud.get_user(db, user_id=user_id)
+    if db_user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return db_user
+
+
+@app.get("/items/", response_model=list[schemas.Item])
+def read_items(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    items = crud.get_items(db, skip=skip, limit=limit)
+    return items
+
+
+
+@app.post("/users/{user_id}/items/", response_model=schemas.Item)
+def create_item_for_user(
+    user_id: int, item: schemas.ItemCreate, db: Session = Depends(get_db)):
+    # check if user exits
+    user = crud.get_user(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
     
-# @app.post("/item")
-# def creat_item():
-#     pass
-
-# @app.get("/item/{item_id}")
-# def get_item(item_id:int):
-#     pass
-
-# @app.put("/item/{item_id}")
-# def update_item(item_id:int):
-#     pass
+    return crud.create_user_item(db=db, item=item, user_id=user_id)
 
 
-# @app.delete("/item/{item_id}")
-# async def delete_item(item_id:int):
-#     pass
+@app.get("/items/{item_id}", response_model=schemas.Item)
+async def read_item(item_id: int, db: Session = Depends(get_db)):
+    item = db.query(models.Item).filter(models.Item.id == item_id).first()
+    if item is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
 

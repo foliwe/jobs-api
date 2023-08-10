@@ -1,18 +1,37 @@
+from typing import Union
+
 from pydantic import BaseModel
 
 
-class JobBase(BaseModel):
+class ItemBase(BaseModel):
     title: str
-    description: str
-    salary: float
-    job_type: str
-    description: str | None = None
+    description: Union[str, None] = None
 
 
-class JobCreate(JobBase):
+class ItemCreate(ItemBase):
     pass
+
+
+class Item(ItemBase):
+    id: int
+    owner_id: int
 
     class Config:
         from_attributes = True
 
 
+class UserBase(BaseModel):
+    email: str
+
+
+class UserCreate(UserBase):
+    password: str
+
+
+class User(UserBase):
+    id: int
+    is_active: bool
+    items: list[Item] = []
+
+    class Config:
+        from_attributes = True
